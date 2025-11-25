@@ -1,0 +1,28 @@
+{
+  "compilerOptions": {
+    // Where the TS source lives
+    "rootDir": "./src",
+    // Where compiled JS will go
+    "outDir": "./dist",
+
+    // Node + CommonJS setup
+    "target": "ES2020",
+    "module": "commonjs",
+    "lib": ["ES2020"],
+    "types": ["node"],
+
+    // Nice-to-have compiler options
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+
+    // Extra strictness you already had
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+
+    // Debugging
+    "sourceMap": true
+  },
+  "include": ["src"]
+}
