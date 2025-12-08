@@ -1,93 +1,74 @@
-import type { FormEvent } from 'react';
+// File: frontend/src/pages/Login.tsx
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
-export default function Login() {
-  const { login } = useAuth();
-  const navigate = useNavigate();
-
+function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+  const { login } = useAuth();
 
-  const handleSubmit = async (e: FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
+    setError('');
     setLoading(true);
 
     try {
-      const res = await fetch('http://localhost:4000/api/auth/login', {
+      const response = await fetch('http://localhost:4000/api/auth/login', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ email, password })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
       });
 
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        const message = data?.message || 'Login failed';
-        throw new Error(message);
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.message || 'Login failed');
       }
 
-      const data = await res.json() as {
-        token: string;
-        user: {
-          id: number;
-          email: string;
-          role: 'jobseeker' | 'employer';
-          isSubscribed: boolean;
-        };
-      };
-
+      const data = await response.json();
       login(data.user, data.token);
-      navigate('/'); // go to home after login
+      navigate('/');
     } catch (err: any) {
-      console.error(err);
-      setError(err.message || 'Login failed');
+      setError(err.message);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div>
+    <div style={{ maxWidth: '400px', margin: '0 auto' }}>
       <h1>Login</h1>
-
-      <form
-        onSubmit={handleSubmit}
-        style={{ maxWidth: 400, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}
-      >
-        <label>
-          Email
+      {error && <div style={{ color: 'red', marginBottom: '1rem' }}>{error}</div>}
+      <form onSubmit={handleSubmit}>
+        <div style={{ marginBottom: '1rem' }}>
+          <label style={{ display: 'block', marginBottom: '0.5rem' }}>Email:</label>
           <input
             type="email"
             value={email}
-            onChange={e => setEmail(e.target.value)}
+            onChange={(e) => setEmail(e.target.value)}
             required
-            style={{ width: '100%' }}
+            style={{ width: '100%', padding: '0.5rem' }}
           />
-        </label>
-
-        <label>
-          Password
+        </div>
+        <div style={{ marginBottom: '1rem' }}>
+          <label style={{ display: 'block', marginBottom: '0.5rem' }}>Password:</label>
           <input
             type="password"
             value={password}
-            onChange={e => setPassword(e.target.value)}
+            onChange={(e) => setPassword(e.target.value)}
             required
-            style={{ width: '100%' }}
+            style={{ width: '100%', padding: '0.5rem' }}
           />
-        </label>
-
-        {error && <p style={{ color: 'red' }}>{error}</p>}
-
-        <button type="submit" disabled={loading}>
-          {loading ? 'Logging in…' : 'Login'}
+        </div>
+        <button type="submit" disabled={loading} style={{ padding: '0.5rem 1rem' }}>
+          {loading ? 'Logging in...' : 'Login'}
         </button>
       </form>
     </div>
   );
 }
+
+export default Login;

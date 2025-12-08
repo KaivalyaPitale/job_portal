@@ -1,137 +1,115 @@
-import { useState } from 'react';
+// File: frontend/src/pages/Subscription.tsx
+import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 
-export default function Subscription() {
-  const { user, token, setUser } = useAuth();
+function Subscription() {
+  const { user, token, updateUser } = useAuth();
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-
-  if (!user || !token) {
-    return <p>You must be logged in as a job seeker to manage your subscription.</p>;
-  }
-
-  if (user.role !== 'jobseeker') {
-    return <p>Only job seekers can have subscriptions.</p>;
-  }
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
 
   const handleSubscribe = async () => {
+    if (!user || !token) return;
+    
+    setError('');
+    setMessage('');
     setLoading(true);
-    setError(null);
-    setSuccess(null);
 
     try {
-      const res = await fetch('http://localhost:4000/api/subscription/subscribe', {
+      const response = await fetch('http://localhost:4000/api/subscription/subscribe', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        }
+          'Authorization': `Bearer ${token}`,
+        },
       });
 
-      const data = await res.json().catch(() => null);
-
-      if (!res.ok) {
-        const message = data?.message || 'Failed to activate subscription';
-        throw new Error(message);
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.message || 'Failed to subscribe');
       }
 
-      if (data?.user) {
-        setUser({
-          id: data.user.id,
-          email: data.user.email,
-          role: data.user.role,
-          isSubscribed: data.user.isSubscribed
-        });
-      }
-
-      setSuccess('Subscription activated.');
+      const data = await response.json();
+      updateUser({ isSubscribed: true });
+      setMessage('Subscription activated successfully!');
     } catch (err: any) {
-      console.error(err);
-      setError(err.message || 'Failed to activate subscription');
+      setError(err.message);
     } finally {
       setLoading(false);
     }
   };
 
   const handleCancel = async () => {
+    if (!user || !token) return;
+    
+    setError('');
+    setMessage('');
     setLoading(true);
-    setError(null);
-    setSuccess(null);
 
     try {
-      const res = await fetch('http://localhost:4000/api/subscription/cancel', {
+      const response = await fetch('http://localhost:4000/api/subscription/cancel', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        }
+          'Authorization': `Bearer ${token}`,
+        },
       });
 
-      const data = await res.json().catch(() => null);
-
-      if (!res.ok) {
-        const message = data?.message || 'Failed to cancel subscription';
-        throw new Error(message);
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.message || 'Failed to cancel subscription');
       }
 
-      if (data?.user) {
-        setUser({
-          id: data.user.id,
-          email: data.user.email,
-          role: data.user.role,
-          isSubscribed: data.user.isSubscribed
-        });
-      }
-
-      setSuccess('Subscription cancelled.');
+      const data = await response.json();
+      updateUser({ isSubscribed: false });
+      setMessage('Subscription cancelled successfully.');
     } catch (err: any) {
-      console.error(err);
-      setError(err.message || 'Failed to cancel subscription');
+      setError(err.message);
     } finally {
       setLoading(false);
     }
   };
 
+  if (!user) {
+    return <div>You must be logged in to manage subscriptions.</div>;
+  }
+
   return (
-    <div>
-      <h1>Subscription</h1>
-      <p>
-        Logged in as <strong>{user.email}</strong> ({user.role})
-      </p>
-
-      <p>
-        Current status:{' '}
-        <strong>{user.isSubscribed ? 'Subscribed' : 'Not subscribed'}</strong>
-      </p>
-
-      {error && <p style={{ color: 'red' }}>{error}</p>}
-      {success && <p style={{ color: 'green' }}>{success}</p>}
-
-      <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem' }}>
-        {!user.isSubscribed && (
-          <button onClick={handleSubscribe} disabled={loading}>
-            {loading ? 'Processing…' : 'Subscribe'}
-          </button>
-        )}
-
-        {user.isSubscribed && (
-          <button onClick={handleCancel} disabled={loading}>
-            {loading ? 'Processing…' : 'Cancel subscription'}
-          </button>
-        )}
+    <div style={{ maxWidth: '600px', margin: '0 auto' }}>
+      <h1>Subscription Management</h1>
+      
+      <div style={{ marginBottom: '2rem', padding: '1rem', border: '1px solid #ccc' }}>
+        <p><strong>Email:</strong> {user.email}</p>
+        <p><strong>Role:</strong> {user.role}</p>
+        <p><strong>Status:</strong> {user.isSubscribed ? 'Subscribed' : 'Not subscribed'}</p>
       </div>
 
-      <hr style={{ margin: '1.5rem 0' }} />
+      {message && <div style={{ color: 'green', marginBottom: '1rem' }}>{message}</div>}
+      {error && <div style={{ color: 'red', marginBottom: '1rem' }}>{error}</div>}
 
-      <p>
-        As a subscribed job seeker you could (in a more complete version of this app):
-      </p>
-      <ul>
-        <li>Use extra search filters.</li>
-        <li>Get personalized job recommendations.</li>
-        <li>Reach out to HRs directly.</li>
-      </ul>
+      {user.role === 'jobseeker' ? (
+        <div>
+          {!user.isSubscribed ? (
+            <button 
+              onClick={handleSubscribe} 
+              disabled={loading}
+              style={{ padding: '0.5rem 1rem' }}
+            >
+              {loading ? 'Processing...' : 'Subscribe'}
+            </button>
+          ) : (
+            <button 
+              onClick={handleCancel} 
+              disabled={loading}
+              style={{ padding: '0.5rem 1rem' }}
+            >
+              {loading ? 'Processing...' : 'Cancel Subscription'}
+            </button>
+          )}
+        </div>
+      ) : (
+        <p>Only job seekers can have subscriptions.</p>
+      )}
     </div>
   );
 }
+
+export default Subscription;

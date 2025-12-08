@@ -1,119 +1,95 @@
-import { useEffect, useState } from 'react';
+// File: frontend/src/pages/MyApplications.tsx
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
-type ApplicationStatus = 'pending' | 'reviewed' | 'rejected' | 'accepted';
-
-type MyApplication = {
+interface Application {
   id: number;
   jobId: number;
   createdAt: string;
   coverLetter?: string;
-  status: ApplicationStatus;
+  status: string;
   job: {
     id: number;
     title: string;
     company: string;
     location: string;
   } | null;
-};
+}
 
-type ResponseShape = {
-  applications: MyApplication[];
-};
-
-export default function MyApplications() {
+function MyApplications() {
   const { user, token } = useAuth();
-  const [apps, setApps] = useState<MyApplication[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [applications, setApplications] = useState<Application[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    if (!user || !token || user.role !== 'jobseeker') return;
+    if (!user || user.role !== 'jobseeker' || !token) {
+      setLoading(false);
+      return;
+    }
 
-    setLoading(true);
-    setError(null);
-
-    fetch('http://localhost:4000/api/jobseeker/applications', {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    })
-      .then(async (res) => {
-        if (!res.ok) {
-          const data = await res.json().catch(() => null);
-          throw new Error(data?.message || 'Failed to load applications');
-        }
-        return res.json();
-      })
-      .then((data: ResponseShape) => {
-        setApps(data.applications);
-      })
-      .catch((err: any) => {
-        console.error(err);
-        setError(err.message || 'Failed to load applications');
-      })
-      .finally(() => {
-        setLoading(false);
-      });
+    fetchApplications();
   }, [user, token]);
 
-  if (!user || !token) {
-    return <p>You must be logged in as a job seeker to view your applications.</p>;
+  const fetchApplications = async () => {
+    try {
+      const response = await fetch('http://localhost:4000/api/jobseeker/applications', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch applications');
+
+      const data = await response.json();
+      setApplications(data.applications);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!user || user.role !== 'jobseeker') {
+    return <div>You must be logged in as a job seeker to view your applications.</div>;
   }
 
-  if (user.role !== 'jobseeker') {
-    return <p>Only job seekers can view this page.</p>;
-  }
+  if (loading) return <div>Loading...</div>;
+  if (error) return <div style={{ color: 'red' }}>{error}</div>;
 
   return (
     <div>
       <h1>My Applications</h1>
-
-      {loading && <p>Loading your applications…</p>}
-      {error && <p style={{ color: 'red' }}>{error}</p>}
-
-      {!loading && !error && apps.length === 0 && (
-        <p>You have not applied for any jobs yet.</p>
-      )}
-
-      {!loading && !error && apps.length > 0 && (
-        <ul style={{ listStyle: 'none', paddingLeft: 0 }}>
-          {apps.map(app => (
-            <li
-              key={app.id}
-              style={{
-                marginBottom: '1rem',
-                borderBottom: '1px solid #ddd',
-                paddingBottom: '0.5rem'
-              }}
-            >
-              <p>
-                <strong>Job:</strong>{' '}
-                {app.job ? (
-                  <Link to={`/jobs/${app.job.id}`}>
-                    {app.job.title} – {app.job.company} ({app.job.location})
-                  </Link>
-                ) : (
-                  <span>(Job removed)</span>
-                )}
-              </p>
-              <p>
-                <strong>Applied on:</strong>{' '}
-                {new Date(app.createdAt).toLocaleString()}
-              </p>
-              <p>
-                <strong>Status:</strong> {app.status}
-              </p>
-              {app.coverLetter && (
-                <p>
-                  <strong>Cover letter:</strong> {app.coverLetter}
-                </p>
+      
+      {applications.length === 0 ? (
+        <p>You have not applied to any jobs yet.</p>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          {applications.map((app) => (
+            <div key={app.id} style={{ padding: '1rem', border: '1px solid #ccc' }}>
+              {app.job ? (
+                <>
+                  <h3>
+                    <Link to={`/jobs/${app.job.id}`}>{app.job.title}</Link>
+                  </h3>
+                  <p><strong>Company:</strong> {app.job.company}</p>
+                  <p><strong>Location:</strong> {app.job.location}</p>
+                </>
+              ) : (
+                <h3>(Job removed)</h3>
               )}
-            </li>
+              <p><strong>Status:</strong> {app.status}</p>
+              <p><strong>Applied:</strong> {new Date(app.createdAt).toLocaleString()}</p>
+              {app.coverLetter && (
+                <p><strong>Cover Letter:</strong> {app.coverLetter}</p>
+              )}
+            </div>
           ))}
-        </ul>
+        </div>
       )}
     </div>
   );
 }
+
+export default MyApplications;

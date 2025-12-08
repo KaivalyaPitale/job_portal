@@ -1,189 +1,165 @@
-import type { FormEvent } from 'react';
-import { useEffect, useState } from 'react';
+// File: frontend/src/pages/Profile.tsx
+import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 
-type ProfileData = {
-  id: number;
-  email: string;
-  role: 'jobseeker' | 'employer';
-  isSubscribed: boolean;
-  fullName?: string;
-  gender?: string;
-  age?: number;
-  currentPosition?: string;
-  visibility?: 'public' | 'private';
-  summary?: string;
-};
-
-export default function Profile() {
+function Profile() {
   const { user, token } = useAuth();
-  const [profile, setProfile] = useState<ProfileData | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  const [formData, setFormData] = useState({
+    fullName: '',
+    gender: '',
+    age: '',
+    currentPosition: '',
+    visibility: 'private',
+    summary: '',
+  });
 
   useEffect(() => {
-    if (!user || !token) return;
+    if (!user || !token) {
+      setLoading(false);
+      return;
+    }
 
-    setLoading(true);
-    setError(null);
-
-    fetch('http://localhost:4000/api/profile', {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    })
-      .then(async (res) => {
-        if (!res.ok) {
-          const data = await res.json().catch(() => null);
-          throw new Error(data?.message || 'Failed to load profile');
-        }
-        return res.json();
-      })
-      .then((data: ProfileData) => {
-        setProfile(data);
-      })
-      .catch((err: any) => {
-        console.error(err);
-        setError(err.message || 'Failed to load profile');
-      })
-      .finally(() => {
-        setLoading(false);
-      });
+    fetchProfile();
   }, [user, token]);
 
-  if (!user || !token) {
-    return <p>You must be logged in to view your profile.</p>;
-  }
+  const fetchProfile = async () => {
+    try {
+      const response = await fetch('http://localhost:4000/api/profile', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
 
-  const handleChange = (field: keyof ProfileData, value: string) => {
-    if (!profile) return;
-    setProfile({
-      ...profile,
-      [field]: field === 'age' ? (value ? Number(value) : undefined) : value
-    });
+      if (!response.ok) throw new Error('Failed to fetch profile');
+
+      const data = await response.json();
+      setFormData({
+        fullName: data.fullName || '',
+        gender: data.gender || '',
+        age: data.age ? String(data.age) : '',
+        currentPosition: data.currentPosition || '',
+        visibility: data.visibility || 'private',
+        summary: data.summary || '',
+      });
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleSubmit = async (e: FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!profile) return;
-
+    setError('');
+    setMessage('');
     setSaving(true);
-    setError(null);
-    setSuccess(null);
 
     try {
-      const res = await fetch('http://localhost:4000/api/profile', {
+      const response = await fetch('http://localhost:4000/api/profile', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
+          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
-          fullName: profile.fullName,
-          gender: profile.gender,
-          age: profile.age,
-          currentPosition: profile.currentPosition,
-          visibility: profile.visibility,
-          summary: profile.summary
-        })
+          ...formData,
+          age: formData.age ? Number(formData.age) : undefined,
+        }),
       });
 
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        const message = data?.message || 'Failed to save profile';
-        throw new Error(message);
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.message || 'Failed to update profile');
       }
 
-      const updated = (await res.json()) as ProfileData;
-      setProfile(updated);
-      setSuccess('Profile saved successfully.');
+      setMessage('Profile updated successfully');
     } catch (err: any) {
-      console.error(err);
-      setError(err.message || 'Failed to save profile');
+      setError(err.message);
     } finally {
       setSaving(false);
     }
   };
 
+  if (!user) {
+    return <div>You must be logged in to view your profile.</div>;
+  }
+
+  if (loading) {
+    return <div>Loading...</div>;
+  }
+
   return (
-    <div>
-      <h1>Job Seeker Profile</h1>
-      <p>
-        Logged in as <strong>{profile?.email}</strong> ({profile?.role})
-      </p>
-
-      {loading && <p>Loading profile…</p>}
-      {error && <p style={{ color: 'red' }}>{error}</p>}
-      {success && <p style={{ color: 'green' }}>{success}</p>}
-
-      {!loading && profile && (
-        <form
-          onSubmit={handleSubmit}
-          style={{ maxWidth: 500, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}
-        >
-          <label>
-            Full name
-            <input
-              type="text"
-              value={profile.fullName ?? ''}
-              onChange={(e) => handleChange('fullName', e.target.value)}
-            />
-          </label>
-
-          <label>
-            Gender
-            <input
-              type="text"
-              value={profile.gender ?? ''}
-              onChange={(e) => handleChange('gender', e.target.value)}
-            />
-          </label>
-
-          <label>
-            Age
-            <input
-              type="number"
-              value={profile.age ?? ''}
-              onChange={(e) => handleChange('age', e.target.value)}
-            />
-          </label>
-
-          <label>
-            Current position
-            <input
-              type="text"
-              value={profile.currentPosition ?? ''}
-              onChange={(e) => handleChange('currentPosition', e.target.value)}
-            />
-          </label>
-
-          <label>
-            Visibility
-            <select
-              value={profile.visibility ?? 'public'}
-              onChange={(e) => handleChange('visibility', e.target.value)}
-            >
-              <option value="public">Public</option>
-              <option value="private">Private</option>
-            </select>
-          </label>
-
-          <label>
-            Summary
-            <textarea
-              rows={4}
-              value={profile.summary ?? ''}
-              onChange={(e) => handleChange('summary', e.target.value)}
-            />
-          </label>
-
-          <button type="submit" disabled={saving}>
-            {saving ? 'Saving…' : 'Save profile'}
-          </button>
-        </form>
-      )}
+    <div style={{ maxWidth: '600px', margin: '0 auto' }}>
+      <h1>Profile</h1>
+      {message && <div style={{ color: 'green', marginBottom: '1rem' }}>{message}</div>}
+      {error && <div style={{ color: 'red', marginBottom: '1rem' }}>{error}</div>}
+      <form onSubmit={handleSubmit}>
+        <div style={{ marginBottom: '1rem' }}>
+          <label style={{ display: 'block', marginBottom: '0.5rem' }}>Full Name:</label>
+          <input
+            type="text"
+            value={formData.fullName}
+            onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+            style={{ width: '100%', padding: '0.5rem' }}
+          />
+        </div>
+        <div style={{ marginBottom: '1rem' }}>
+          <label style={{ display: 'block', marginBottom: '0.5rem' }}>Gender:</label>
+          <input
+            type="text"
+            value={formData.gender}
+            onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
+            style={{ width: '100%', padding: '0.5rem' }}
+          />
+        </div>
+        <div style={{ marginBottom: '1rem' }}>
+          <label style={{ display: 'block', marginBottom: '0.5rem' }}>Age:</label>
+          <input
+            type="number"
+            value={formData.age}
+            onChange={(e) => setFormData({ ...formData, age: e.target.value })}
+            style={{ width: '100%', padding: '0.5rem' }}
+          />
+        </div>
+        <div style={{ marginBottom: '1rem' }}>
+          <label style={{ display: 'block', marginBottom: '0.5rem' }}>Current Position:</label>
+          <input
+            type="text"
+            value={formData.currentPosition}
+            onChange={(e) => setFormData({ ...formData, currentPosition: e.target.value })}
+            style={{ width: '100%', padding: '0.5rem' }}
+          />
+        </div>
+        <div style={{ marginBottom: '1rem' }}>
+          <label style={{ display: 'block', marginBottom: '0.5rem' }}>Visibility:</label>
+          <select
+            value={formData.visibility}
+            onChange={(e) => setFormData({ ...formData, visibility: e.target.value })}
+            style={{ width: '100%', padding: '0.5rem' }}
+          >
+            <option value="public">Public</option>
+            <option value="private">Private</option>
+          </select>
+        </div>
+        <div style={{ marginBottom: '1rem' }}>
+          <label style={{ display: 'block', marginBottom: '0.5rem' }}>Summary:</label>
+          <textarea
+            value={formData.summary}
+            onChange={(e) => setFormData({ ...formData, summary: e.target.value })}
+            rows={5}
+            style={{ width: '100%', padding: '0.5rem' }}
+          />
+        </div>
+        <button type="submit" disabled={saving} style={{ padding: '0.5rem 1rem' }}>
+          {saving ? 'Saving...' : 'Save Profile'}
+        </button>
+      </form>
     </div>
   );
 }
+
+export default Profile;

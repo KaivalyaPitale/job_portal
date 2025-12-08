@@ -1,213 +1,213 @@
-import type { FormEvent } from 'react';
-import { useEffect, useState } from 'react';
+// File: frontend/src/pages/EmployerJobs.tsx
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
-type EmployerJob = {
+interface Job {
   id: number;
   title: string;
   company: string;
   location: string;
+  description: string;
   teaser: string;
-};
+}
 
-export default function EmployerJobs() {
+function EmployerJobs() {
   const { user, token } = useAuth();
-  const [jobs, setJobs] = useState<EmployerJob[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [deletingId, setDeletingId] = useState<number | null>(null);
-
-  const [title, setTitle] = useState('');
-  const [company, setCompany] = useState('');
-  const [location, setLocation] = useState('');
-  const [description, setDescription] = useState('');
-  const [teaser, setTeaser] = useState('');
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
+  const [formData, setFormData] = useState({
+    title: '',
+    company: '',
+    location: '',
+    description: '',
+    teaser: '',
+  });
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
-    if (!user || !token || user.role !== 'employer') return;
+    if (!user || user.role !== 'employer' || !token) {
+      setLoading(false);
+      return;
+    }
 
-    setLoading(true);
-    setError(null);
-
-    fetch('http://localhost:4000/api/employer/jobs', {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    })
-      .then(async (res) => {
-        if (!res.ok) {
-          const data = await res.json().catch(() => null);
-          throw new Error(data?.message || 'Failed to load employer jobs');
-        }
-        return res.json();
-      })
-      .then((data: EmployerJob[]) => {
-        setJobs(data);
-      })
-      .catch((err: any) => {
-        console.error(err);
-        setError(err.message || 'Failed to load employer jobs');
-      })
-      .finally(() => {
-        setLoading(false);
-      });
+    fetchJobs();
   }, [user, token]);
 
-  if (!user || !token) {
-    return <p>You must be logged in as an employer to view this page.</p>;
-  }
+  const fetchJobs = async () => {
+    try {
+      const response = await fetch('http://localhost:4000/api/employer/jobs', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
 
-  if (user.role !== 'employer') {
-    return <p>Only employers can access this page.</p>;
-  }
+      if (!response.ok) throw new Error('Failed to fetch jobs');
 
-  const handleCreateJob = async (e: FormEvent) => {
+      const data = await response.json();
+      setJobs(data);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateJob = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    setSaving(true);
-    setError(null);
+    setError('');
+    setMessage('');
+    setCreating(true);
 
     try {
-      const res = await fetch('http://localhost:4000/api/employer/jobs', {
+      const response = await fetch('http://localhost:4000/api/employer/jobs', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
+          'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          title,
-          company,
-          location,
-          description,
-          teaser
-        })
+        body: JSON.stringify(formData),
       });
 
-      const data = await res.json().catch(() => null);
-
-      if (!res.ok) {
-        const message = data?.message || 'Failed to create job';
-        throw new Error(message);
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.message || 'Failed to create job');
       }
 
-      setJobs((prev) => [...prev, data]);
-
-      // reset form
-      setTitle('');
-      setCompany('');
-      setLocation('');
-      setDescription('');
-      setTeaser('');
+      const newJob = await response.json();
+      setJobs([...jobs, newJob]);
+      setFormData({ title: '', company: '', location: '', description: '', teaser: '' });
+      setMessage('Job created successfully!');
     } catch (err: any) {
-      console.error(err);
-      setError(err.message || 'Failed to create job');
+      setError(err.message);
     } finally {
-      setSaving(false);
+      setCreating(false);
     }
   };
 
   const handleDeleteJob = async (jobId: number) => {
-    if (!token) return;
-
-    setDeletingId(jobId);
-    setError(null);
+    if (!confirm('Are you sure you want to delete this job?')) return;
 
     try {
-      const res = await fetch(`http://localhost:4000/api/employer/jobs/${jobId}`, {
+      const response = await fetch(`http://localhost:4000/api/employer/jobs/${jobId}`, {
         method: 'DELETE',
         headers: {
-          Authorization: `Bearer ${token}`
-        }
+          'Authorization': `Bearer ${token}`,
+        },
       });
 
-      const data = await res.json().catch(() => null);
+      if (!response.ok) throw new Error('Failed to delete job');
 
-      if (!res.ok) {
-        const message = data?.message || 'Failed to delete job';
-        throw new Error(message);
-      }
-
-      setJobs(prev => prev.filter(j => j.id !== jobId));
+      setJobs(jobs.filter(j => j.id !== jobId));
+      setMessage('Job deleted successfully.');
     } catch (err: any) {
-      console.error(err);
-      setError(err.message || 'Failed to delete job');
-    } finally {
-      setDeletingId(null);
+      setError(err.message);
     }
   };
 
+  if (!user || user.role !== 'employer') {
+    return <div>You must be logged in as an employer to manage jobs.</div>;
+  }
+
+  if (loading) return <div>Loading...</div>;
+
   return (
     <div>
-      <h1>Employer Jobs</h1>
-      <p>Logged in as <strong>{user.email}</strong> (employer)</p>
+      <h1>My Job Postings</h1>
 
-      {loading && <p>Loading your jobs…</p>}
-      {error && <p style={{ color: 'red' }}>{error}</p>}
+      {message && <div style={{ color: 'green', marginBottom: '1rem' }}>{message}</div>}
+      {error && <div style={{ color: 'red', marginBottom: '1rem' }}>{error}</div>}
 
-      <h2>Your job posts</h2>
-      {jobs.length === 0 && !loading && <p>You have no job posts yet.</p>}
-      <ul style={{ listStyle: 'none', paddingLeft: 0 }}>
-        {jobs.map(job => (
-          <li key={job.id} style={{ marginBottom: '1rem' }}>
-            <strong>{job.title}</strong> – {job.company} ({job.location})
-            <div>{job.teaser}</div>
-            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem' }}>
-              <Link to={`/employer/jobs/${job.id}/applications`}>View applications</Link>
-              <button
-                type="button"
-                onClick={() => handleDeleteJob(job.id)}
-                disabled={deletingId === job.id}
-              >
-                {deletingId === job.id ? 'Deleting…' : 'Delete'}
-              </button>
-            </div>
-          </li>
-        ))}
-      </ul>
+      <div style={{ marginBottom: '3rem' }}>
+        <h2>Your Jobs</h2>
+        {jobs.length === 0 ? (
+          <p>You have not posted any jobs yet.</p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            {jobs.map((job) => (
+              <div key={job.id} style={{ padding: '1rem', border: '1px solid #ccc' }}>
+                <h3>{job.title}</h3>
+                <p><strong>Company:</strong> {job.company}</p>
+                <p><strong>Location:</strong> {job.location}</p>
+                <p>{job.teaser}</p>
+                <div style={{ marginTop: '1rem', display: 'flex', gap: '1rem' }}>
+                  <Link to={`/employer/jobs/${job.id}/applications`}>
+                    <button style={{ padding: '0.5rem 1rem' }}>View Applications</button>
+                  </Link>
+                  <button 
+                    onClick={() => handleDeleteJob(job.id)}
+                    style={{ padding: '0.5rem 1rem', backgroundColor: '#dc3545', color: 'white', border: 'none' }}
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
-      <hr style={{ margin: '1.5rem 0' }} />
-
-      <h2>Create a new job post</h2>
-      <form
-        onSubmit={handleCreateJob}
-        style={{ maxWidth: 500, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}
-      >
-        <label>
-          Title
-          <input value={title} onChange={e => setTitle(e.target.value)} required />
-        </label>
-
-        <label>
-          Company
-          <input value={company} onChange={e => setCompany(e.target.value)} required />
-        </label>
-
-        <label>
-          Location
-          <input value={location} onChange={e => setLocation(e.target.value)} required />
-        </label>
-
-        <label>
-          Description
-          <textarea
-            rows={4}
-            value={description}
-            onChange={e => setDescription(e.target.value)}
-            required
-          />
-        </label>
-
-        <label>
-          Teaser (short summary, optional)
-          <input value={teaser} onChange={e => setTeaser(e.target.value)} />
-        </label>
-
-        <button type="submit" disabled={saving}>
-          {saving ? 'Creating…' : 'Create job'}
-        </button>
-      </form>
+      <div style={{ borderTop: '2px solid #ccc', paddingTop: '2rem' }}>
+        <h2>Create New Job</h2>
+        <form onSubmit={handleCreateJob}>
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={{ display: 'block', marginBottom: '0.5rem' }}>Title *</label>
+            <input
+              type="text"
+              value={formData.title}
+              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+              required
+              style={{ width: '100%', padding: '0.5rem' }}
+            />
+          </div>
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={{ display: 'block', marginBottom: '0.5rem' }}>Company *</label>
+            <input
+              type="text"
+              value={formData.company}
+              onChange={(e) => setFormData({ ...formData, company: e.target.value })}
+              required
+              style={{ width: '100%', padding: '0.5rem' }}
+            />
+          </div>
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={{ display: 'block', marginBottom: '0.5rem' }}>Location *</label>
+            <input
+              type="text"
+              value={formData.location}
+              onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+              required
+              style={{ width: '100%', padding: '0.5rem' }}
+            />
+          </div>
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={{ display: 'block', marginBottom: '0.5rem' }}>Description *</label>
+            <textarea
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              required
+              rows={5}
+              style={{ width: '100%', padding: '0.5rem' }}
+            />
+          </div>
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={{ display: 'block', marginBottom: '0.5rem' }}>Teaser (optional)</label>
+            <input
+              type="text"
+              value={formData.teaser}
+              onChange={(e) => setFormData({ ...formData, teaser: e.target.value })}
+              style={{ width: '100%', padding: '0.5rem' }}
+            />
+          </div>
+          <button type="submit" disabled={creating} style={{ padding: '0.5rem 1rem' }}>
+            {creating ? 'Creating...' : 'Create Job'}
+          </button>
+        </form>
+      </div>
     </div>
   );
 }
+
+export default EmployerJobs;

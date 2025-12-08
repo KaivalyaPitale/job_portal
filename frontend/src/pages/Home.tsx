@@ -1,130 +1,128 @@
-import { useEffect, useState } from 'react';
+// File: frontend/src/pages/Home.tsx
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 
-type Job = {
+interface Job {
   id: number;
   title: string;
   company: string;
   location: string;
+  description: string;
   teaser: string;
-};
+}
 
-export default function Home() {
+function Home() {
   const [jobs, setJobs] = useState<Job[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [searchParams, setSearchParams] = useState({
+    q: '',
+    location: '',
+    company: '',
+  });
 
-  // search filters
-  const [query, setQuery] = useState('');
-  const [location, setLocation] = useState('');
-  const [company, setCompany] = useState('');
-
-  const fetchJobs = () => {
-    setLoading(true);
-    setError(null);
-
-    const params = new URLSearchParams();
-    if (query.trim()) params.set('q', query.trim());
-    if (location.trim()) params.set('location', location.trim());
-    if (company.trim()) params.set('company', company.trim());
-
-    const url =
-      params.toString().length > 0
-        ? `http://localhost:4000/api/jobs?${params.toString()}`
-        : 'http://localhost:4000/api/jobs';
-
-    fetch(url)
-      .then(async (res) => {
-        if (!res.ok) {
-          const data = await res.json().catch(() => null);
-          throw new Error(data?.message || 'Failed to load jobs');
-        }
-        return res.json();
-      })
-      .then((data: Job[]) => {
-        setJobs(data);
-      })
-      .catch((err: any) => {
-        console.error(err);
-        setError(err.message || 'Failed to load jobs');
-      })
-      .finally(() => {
-        setLoading(false);
-      });
-  };
-
-  // initial load
   useEffect(() => {
     fetchJobs();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleSearchSubmit = (e: React.FormEvent) => {
+  const fetchJobs = async (params?: typeof searchParams) => {
+    setLoading(true);
+    setError('');
+
+    try {
+      const queryParams = new URLSearchParams();
+      if (params) {
+        if (params.q) queryParams.append('q', params.q);
+        if (params.location) queryParams.append('location', params.location);
+        if (params.company) queryParams.append('company', params.company);
+      }
+
+      const url = `http://localhost:4000/api/jobs${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
+      const response = await fetch(url);
+
+      if (!response.ok) throw new Error('Failed to fetch jobs');
+
+      const data = await response.json();
+      setJobs(data);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    fetchJobs();
+    fetchJobs(searchParams);
   };
 
   return (
     <div>
       <h1>Job Search</h1>
-
-      {/* Search form */}
-      <form
-        onSubmit={handleSearchSubmit}
-        style={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: '0.5rem',
-          marginBottom: '1rem'
-        }}
-      >
-        <input
-          placeholder="Keyword (title, skills...)"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-        <input
-          placeholder="Location"
-          value={location}
-          onChange={(e) => setLocation(e.target.value)}
-        />
-        <input
-          placeholder="Company"
-          value={company}
-          onChange={(e) => setCompany(e.target.value)}
-        />
-        <button type="submit">Search</button>
-        <button
-          type="button"
-          onClick={() => {
-            setQuery('');
-            setLocation('');
-            setCompany('');
-            fetchJobs();
-          }}
-        >
-          Clear
-        </button>
+      
+      <form onSubmit={handleSearch} style={{ marginBottom: '2rem', padding: '1rem', border: '1px solid #ccc' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+          <div>
+            <label style={{ display: 'block', marginBottom: '0.5rem' }}>Keyword:</label>
+            <input
+              type="text"
+              value={searchParams.q}
+              onChange={(e) => setSearchParams({ ...searchParams, q: e.target.value })}
+              placeholder="Title, description, company..."
+              style={{ width: '100%', padding: '0.5rem' }}
+            />
+          </div>
+          <div>
+            <label style={{ display: 'block', marginBottom: '0.5rem' }}>Location:</label>
+            <input
+              type="text"
+              value={searchParams.location}
+              onChange={(e) => setSearchParams({ ...searchParams, location: e.target.value })}
+              placeholder="City, state..."
+              style={{ width: '100%', padding: '0.5rem' }}
+            />
+          </div>
+          <div>
+            <label style={{ display: 'block', marginBottom: '0.5rem' }}>Company:</label>
+            <input
+              type="text"
+              value={searchParams.company}
+              onChange={(e) => setSearchParams({ ...searchParams, company: e.target.value })}
+              placeholder="Company name..."
+              style={{ width: '100%', padding: '0.5rem' }}
+            />
+          </div>
+        </div>
+        <button type="submit" style={{ padding: '0.5rem 1rem' }}>Search</button>
       </form>
 
-      {loading && <p>Loading jobs...</p>}
-      {error && <p style={{ color: 'red' }}>{error}</p>}
-
-      {!loading && !error && jobs.length === 0 && <p>No jobs found.</p>}
-
-      {!loading && !error && jobs.length > 0 && (
-        <ul style={{ listStyle: 'none', paddingLeft: 0 }}>
-          {jobs.map((job) => (
-            <li key={job.id} style={{ marginBottom: '1rem' }}>
-              <Link to={`/jobs/${job.id}`}>
-                <strong>{job.title}</strong>
-              </Link>{' '}
-              – {job.company} ({job.location})
-              <div>{job.teaser}</div>
-            </li>
-          ))}
-        </ul>
+      {error && <div style={{ color: 'red', marginBottom: '1rem' }}>{error}</div>}
+      
+      {loading ? (
+        <div>Loading...</div>
+      ) : (
+        <div>
+          <h2>Jobs ({jobs.length})</h2>
+          {jobs.length === 0 ? (
+            <p>No jobs found.</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {jobs.map((job) => (
+                <div key={job.id} style={{ padding: '1rem', border: '1px solid #ccc' }}>
+                  <h3>
+                    <Link to={`/jobs/${job.id}`}>{job.title}</Link>
+                  </h3>
+                  <p><strong>Company:</strong> {job.company}</p>
+                  <p><strong>Location:</strong> {job.location}</p>
+                  <p>{job.teaser}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
 }
+
+export default Home;

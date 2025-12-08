@@ -1,175 +1,135 @@
-import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+// File: frontend/src/pages/EmployerJobApplications.tsx
+import { useState, useEffect } from 'react';
+import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
-type ApplicationStatus = 'pending' | 'reviewed' | 'rejected' | 'accepted';
-
-type ApplicationItem = {
+interface Application {
   id: number;
   jobId: number;
   userId: number;
-  applicantEmail?: string;
+  applicantEmail: string;
   applicantName?: string;
   createdAt: string;
   coverLetter?: string;
-  status: ApplicationStatus;
-};
+  status: string;
+}
 
-type JobApplicationsResponse = {
-  job: {
-    id: number;
-    title: string;
-    company: string;
-  };
-  applications: ApplicationItem[];
-};
+interface JobInfo {
+  id: number;
+  title: string;
+  company: string;
+}
 
-const STATUSES: ApplicationStatus[] = ['pending', 'reviewed', 'rejected', 'accepted'];
-
-export default function EmployerJobApplications() {
+function EmployerJobApplications() {
   const { id } = useParams<{ id: string }>();
   const { user, token } = useAuth();
-  const [data, setData] = useState<JobApplicationsResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [updatingId, setUpdatingId] = useState<number | null>(null);
-  const [updateError, setUpdateError] = useState<string | null>(null);
+  const [job, setJob] = useState<JobInfo | null>(null);
+  const [applications, setApplications] = useState<Application[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    if (!id || !user || !token || user.role !== 'employer') return;
+    if (!user || user.role !== 'employer' || !token) {
+      setLoading(false);
+      return;
+    }
 
-    setLoading(true);
-    setError(null);
+    fetchApplications();
+  }, [user, token, id]);
 
-    fetch(`http://localhost:4000/api/employer/jobs/${id}/applications`, {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    })
-      .then(async (res) => {
-        if (!res.ok) {
-          const data = await res.json().catch(() => null);
-          throw new Error(data?.message || 'Failed to load applications');
-        }
-        return res.json();
-      })
-      .then((data: JobApplicationsResponse) => {
-        setData(data);
-      })
-      .catch((err: any) => {
-        console.error(err);
-        setError(err.message || 'Failed to load applications');
-      })
-      .finally(() => {
-        setLoading(false);
-      });
-  }, [id, user, token]);
-
-  if (!id) return <p>No job id provided.</p>;
-  if (!user || !token) return <p>You must be logged in as an employer to view this page.</p>;
-  if (user.role !== 'employer') return <p>Only employers can view applications.</p>;
-
-  if (loading) return <p>Loading applications…</p>;
-  if (error) return <p style={{ color: 'red' }}>{error}</p>;
-  if (!data) return <p>No data loaded.</p>;
-
-  const { job, applications } = data;
-
-  const handleStatusChange = async (appId: number, newStatus: ApplicationStatus) => {
-    if (!token) return;
-
-    setUpdatingId(appId);
-    setUpdateError(null);
-
+  const fetchApplications = async () => {
     try {
-      const res = await fetch(`http://localhost:4000/api/employer/applications/${appId}`, {
-        method: 'PATCH',
+      const response = await fetch(`http://localhost:4000/api/employer/jobs/${id}/applications`, {
         headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
+          'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify({ status: newStatus })
       });
 
-      const payload = await res.json().catch(() => null);
+      if (!response.ok) throw new Error('Failed to fetch applications');
 
-      if (!res.ok) {
-        const message = payload?.message || 'Failed to update status';
-        throw new Error(message);
-      }
-
-      // Update local state
-      setData(prev =>
-        prev
-          ? {
-              ...prev,
-              applications: prev.applications.map(app =>
-                app.id === appId ? { ...app, status: newStatus } : app
-              )
-            }
-          : prev
-      );
+      const data = await response.json();
+      setJob(data.job);
+      setApplications(data.applications);
     } catch (err: any) {
-      console.error(err);
-      setUpdateError(err.message || 'Failed to update status');
+      setError(err.message);
     } finally {
-      setUpdatingId(null);
+      setLoading(false);
     }
   };
 
+  const handleStatusChange = async (applicationId: number, newStatus: string) => {
+    try {
+      const response = await fetch(`http://localhost:4000/api/employer/applications/${applicationId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ status: newStatus }),
+      });
+
+      if (!response.ok) throw new Error('Failed to update status');
+
+      const data = await response.json();
+      setApplications(applications.map(app => 
+        app.id === applicationId ? { ...app, status: newStatus } : app
+      ));
+    } catch (err: any) {
+      setError(err.message);
+    }
+  };
+
+  if (!user || user.role !== 'employer') {
+    return <div>You must be logged in as an employer to view applications.</div>;
+  }
+
+  if (loading) return <div>Loading...</div>;
+  if (error) return <div style={{ color: 'red' }}>{error}</div>;
+  if (!job) return <div>Job not found</div>;
+
   return (
     <div>
+      <Link to="/employer/jobs" style={{ display: 'block', marginBottom: '1rem' }}>
+        ← Back to My Jobs
+      </Link>
+
       <h1>Applications for {job.title}</h1>
       <p><strong>Company:</strong> {job.company}</p>
 
       {applications.length === 0 ? (
         <p>No applications yet.</p>
       ) : (
-        <ul style={{ listStyle: 'none', paddingLeft: 0 }}>
-          {applications.map(app => (
-            <li
-              key={app.id}
-              style={{
-                marginBottom: '1rem',
-                borderBottom: '1px solid #ddd',
-                paddingBottom: '0.5rem'
-              }}
-            >
-              <p>
-                <strong>Applicant:</strong>{' '}
-                {app.applicantName
-                  ? `${app.applicantName} (${app.applicantEmail})`
-                  : app.applicantEmail ?? `User ${app.userId}`}
-              </p>
-              <p><strong>Submitted:</strong> {new Date(app.createdAt).toLocaleString()}</p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '2rem' }}>
+          {applications.map((app) => (
+            <div key={app.id} style={{ padding: '1rem', border: '1px solid #ccc' }}>
+              <p><strong>Applicant:</strong> {app.applicantName || app.applicantEmail}</p>
+              <p><strong>Email:</strong> {app.applicantEmail}</p>
+              <p><strong>Applied:</strong> {new Date(app.createdAt).toLocaleString()}</p>
               {app.coverLetter && (
-                <p>
-                  <strong>Cover letter:</strong> {app.coverLetter}
-                </p>
+                <div style={{ marginTop: '0.5rem' }}>
+                  <strong>Cover Letter:</strong>
+                  <p style={{ whiteSpace: 'pre-wrap', marginTop: '0.5rem' }}>{app.coverLetter}</p>
+                </div>
               )}
-
-              <label>
-                <strong>Status: </strong>
+              <div style={{ marginTop: '1rem' }}>
+                <label style={{ marginRight: '0.5rem' }}><strong>Status:</strong></label>
                 <select
                   value={app.status}
-                  onChange={e =>
-                    handleStatusChange(app.id, e.target.value as ApplicationStatus)
-                  }
-                  disabled={updatingId === app.id}
+                  onChange={(e) => handleStatusChange(app.id, e.target.value)}
+                  style={{ padding: '0.5rem' }}
                 >
-                  {STATUSES.map(s => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
+                  <option value="pending">Pending</option>
+                  <option value="reviewed">Reviewed</option>
+                  <option value="accepted">Accepted</option>
+                  <option value="rejected">Rejected</option>
                 </select>
-              </label>
-            </li>
+              </div>
+            </div>
           ))}
-        </ul>
+        </div>
       )}
-
-      {updateError && <p style={{ color: 'red' }}>{updateError}</p>}
     </div>
   );
 }
+
+export default EmployerJobApplications;

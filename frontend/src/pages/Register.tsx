@@ -1,96 +1,82 @@
-import type { FormEvent } from 'react';
+// File: frontend/src/pages/Register.tsx
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-type UserRole = 'jobseeker' | 'employer';
-
-export default function Register() {
-  const navigate = useNavigate();
-
+function Register() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<UserRole>('jobseeker');
-  const [error, setError] = useState<string | null>(null);
+  const [role, setRole] = useState<'jobseeker' | 'employer'>('jobseeker');
+  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
 
-  const handleSubmit = async (e: FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
+    setError('');
     setLoading(true);
 
     try {
-      const res = await fetch('http://localhost:4000/api/auth/register', {
+      const response = await fetch('http://localhost:4000/api/auth/register', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ email, password, role })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, role }),
       });
 
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        const message = data?.message || 'Registration failed';
-        throw new Error(message);
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.message || 'Registration failed');
       }
 
-      // After successful registration, go to login page
       navigate('/login');
     } catch (err: any) {
-      console.error(err);
-      setError(err.message || 'Registration failed');
+      setError(err.message);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div>
+    <div style={{ maxWidth: '400px', margin: '0 auto' }}>
       <h1>Register</h1>
-
-      <form
-        onSubmit={handleSubmit}
-        style={{ maxWidth: 400, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}
-      >
-        <label>
-          Email
+      {error && <div style={{ color: 'red', marginBottom: '1rem' }}>{error}</div>}
+      <form onSubmit={handleSubmit}>
+        <div style={{ marginBottom: '1rem' }}>
+          <label style={{ display: 'block', marginBottom: '0.5rem' }}>Email:</label>
           <input
             type="email"
             value={email}
-            onChange={e => setEmail(e.target.value)}
+            onChange={(e) => setEmail(e.target.value)}
             required
-            style={{ width: '100%' }}
+            style={{ width: '100%', padding: '0.5rem' }}
           />
-        </label>
-
-        <label>
-          Password
+        </div>
+        <div style={{ marginBottom: '1rem' }}>
+          <label style={{ display: 'block', marginBottom: '0.5rem' }}>Password:</label>
           <input
             type="password"
             value={password}
-            onChange={e => setPassword(e.target.value)}
+            onChange={(e) => setPassword(e.target.value)}
             required
-            style={{ width: '100%' }}
+            style={{ width: '100%', padding: '0.5rem' }}
           />
-        </label>
-
-        <label>
-          Role
+        </div>
+        <div style={{ marginBottom: '1rem' }}>
+          <label style={{ display: 'block', marginBottom: '0.5rem' }}>Role:</label>
           <select
             value={role}
-            onChange={e => setRole(e.target.value as UserRole)}
-            style={{ width: '100%' }}
+            onChange={(e) => setRole(e.target.value as 'jobseeker' | 'employer')}
+            style={{ width: '100%', padding: '0.5rem' }}
           >
             <option value="jobseeker">Job Seeker</option>
             <option value="employer">Employer</option>
           </select>
-        </label>
-
-        {error && <p style={{ color: 'red' }}>{error}</p>}
-
-        <button type="submit" disabled={loading}>
-          {loading ? 'Registering…' : 'Register'}
+        </div>
+        <button type="submit" disabled={loading} style={{ padding: '0.5rem 1rem' }}>
+          {loading ? 'Registering...' : 'Register'}
         </button>
       </form>
     </div>
   );
 }
+
+export default Register;
